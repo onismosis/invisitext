@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Invisible Text - PDF text-layer test</title>
+    <link rel="stylesheet" href="../styles.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  </head>
+  <body>
+    <main class="app">
+      <section class="panel">
+        <h1>Automated PDF text-layer test</h1>
+        <p class="hint">This test creates a small PDF, loads it into the app, adds a text-layer annotation, exports a PDF and verifies the exported PDF contains the text.</p>
+        <div id="testStatus" class="status">Preparing test...</div>
+      </section>
+
+      <section class="workspace">
+        <canvas id="editorCanvas" width="960" height="640"></canvas>
+      </section>
+    </main>
+
+    <script type="module" src="../app.js"></script>
+    <script>
+      (async function runTest() {
+        const status = document.getElementById('testStatus');
+        // wait for the test API to become available
+        for (let i = 0; i < 50; i++) {
+          if (window.invisibleTextAPI) break;
+          await new Promise(r => setTimeout(r, 100));
+        }
+        if (!window.invisibleTextAPI) {
+          status.textContent = 'FAIL: test API not available (open console for details)';
+          console.error('invisibleTextAPI not found');
+          return;
+        }
+
+        try {
+          status.textContent = 'Generating sample PDF...';
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({ unit: 'px', format: [612, 792] });
+          doc.setFontSize(18);
+          doc.text('Sample source PDF page', 40, 40);
+
+          const pdfBlob = doc.output('blob');
+          const pdfBytes = await pdfBlob.arrayBuffer();
+
+          status.textContent = 'Importing PDF into app...';
+          await window.invisibleTextAPI.importPdfBytes(pdfBytes);
+          await new Promise(r => setTimeout(r, 300));
+
+          const canvasEl = document.getElementById('editorCanvas');
+          const rect = {
+            x: Math.floor(canvasEl.width / 2 - 100),
+            y: Math.floor(canvasEl.height / 2 - 20),
+            width: 200,
+            height: 40,
+          };
+          window.invisibleTextAPI.setSelection(rect);
+
+          const secret = 'HIDDEN_TEST_987';
+          window.invisibleTextAPI.setSecretText(secret);
+          window.invisibleTextAPI.setMode('text-layer');
+          window.invisibleTextAPI.setAutoDetect(false);
+          window.invisibleTextAPI.setColor('#000000');
+
+          status.textContent = 'Embedding annotation...';
+          window.invisibleTextAPI.embedNow();
+          await new Promise(r => setTimeout(r, 200));
+
+          status.textContent = 'Exporting PDF to blob...';
+          const outBlob = await window.invisibleTextAPI.exportPdfToBlob();
+          const outBytes = await outBlob.arrayBuffer();
+
+          status.textContent = 'Parsing exported PDF and extracting text...';
+          const pdf = await pdfjsLib.getDocument({ data: outBytes }).promise;
+          const page = await pdf.getPage(1);
+          const txt = await page.getTextContent();
+          const combined = txt.items.map(i => i.str).join(' ');
+
+          if (combined.includes(secret)) {
+            status.textContent = 'PASS: secret text found in exported PDF';
+            console.log('Extracted text:', combined);
+          } else {
+            status.textContent = 'FAIL: secret text NOT found in exported PDF';
+            console.warn('Extracted text:', combined);
+          }
+        } catch (err) {
+          status.textContent = 'FAIL: error during test - see console';
+          console.error(err);
+        }
+      })();
+    </script>
+  </body>
+</html>
