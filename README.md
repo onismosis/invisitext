@@ -19,6 +19,7 @@ Let's see how many interviews I get invited to ;)
 1. Start a local static server from this directory:
    - `python3 -m http.server 4173`
 2. Open `http://localhost:4173` in a browser.
+   ![landing_page](./assets/invisitext_landing.png)
 
 ## Usage
 
